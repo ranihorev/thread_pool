@@ -20,6 +20,7 @@ using taskFn = std::function<void(int taskId)>;
 class Task {
     taskFn mFn;
     int mId;
+
 public:
     Task(taskFn fn, int taskId);
     Task();
@@ -39,6 +40,7 @@ class ThreadPool {
     int taskCounter = 0;
     std::mutex mQueueMutex;
     std::condition_variable mCondVar;
+    bool mShouldStop = false;
     
 public:
     ThreadPool(int size);
@@ -46,6 +48,7 @@ public:
     int addTask(taskFn fn);
     bool isEmpty();
     DeleteResponse deleteTask(int taskId);
+    void stop();
 };
 
 #endif /* ThreadPool_h */

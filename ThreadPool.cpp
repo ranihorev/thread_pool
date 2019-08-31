@@ -33,8 +33,11 @@ ThreadPool::ThreadPool(int size): mSize{size} {
                 Task task;
                 {
                     std::unique_lock<std::mutex> queueLock(this->mQueueMutex);
-                    this->mCondVar.wait(queueLock, [this]() { return !this->mTasks.empty(); });
-                    if (this->mTasks.empty()) continue;
+                    this->mCondVar.wait(queueLock, [this]() {
+                        std::cout << "Checking\n";
+                        return !this->mTasks.empty() || this->mShouldStop;
+                    });
+                    if (this->mShouldStop && this->mTasks.empty()) return;
                     task = this->mTasks.front();
                     this->mTasks.pop_front();
                 }
@@ -46,17 +49,21 @@ ThreadPool::ThreadPool(int size): mSize{size} {
 };
 
 ThreadPool::~ThreadPool() {
-//    mCondVar.notify_all();
+    mCondVar.notify_all();
     for (auto& thread: mThreads) {
         thread.join();
     }
 }
 
 int ThreadPool::addTask(taskFn fn) {
-    std::cout << "Adding task to queue: " << taskCounter << std::endl;
     std::unique_lock<std::mutex> queueLock(mQueueMutex);
+    if (mShouldStop) {
+        std::cout << "Cannot add more tasks to queue\n";
+        return -1;
+    }
+    std::cout << "Adding task to queue: " << taskCounter << std::endl;
     auto t = Task(fn, taskCounter++);
-    mTasks.push_back(t);
+    mTasks.push_back(t); // does t goes out of scope?
     mCondVar.notify_one();
     return t.getId();
 }
@@ -75,4 +82,10 @@ DeleteResponse ThreadPool::deleteTask(int taskId) {
         ++t;
     }
     return DeleteResponse::NOT_FOUND;
+}
+
+void ThreadPool::stop() {
+    std::unique_lock<std::mutex> queueLock(mQueueMutex);
+    mShouldStop = true;
+    mCondVar.notify_all();
 }
