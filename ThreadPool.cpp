@@ -14,6 +14,10 @@ Task::Task(taskFn fn, int taskId): mFn{fn}, mId{taskId} {
     
 }
 
+Task::Task() {
+    
+}
+
 void Task::execute() {
     mFn(mId);
 }
@@ -26,15 +30,15 @@ ThreadPool::ThreadPool(int size): mSize{size} {
     for(int i = 0; i < size; i++) {
         auto t = std::thread( [this, i](){
             while (true) {
-                Task* task;
+                Task task;
                 {
                     std::unique_lock<std::mutex> queueLock(this->mQueueMutex);
                     this->mCondVar.wait(queueLock, [this]() { return !this->mTasks.empty(); });
-                    task = &this->mTasks.front();
-                    this->mTasks.pop();
-                    std::cout << "Thread " << i << " Executing task " << task->getId() << std::endl;
+                    if (this->mTasks.empty()) continue;
+                    task = this->mTasks.front();
+                    this->mTasks.pop_front();
                 }
-                task->execute();
+                task.execute();
             }
         });
         mThreads.push_back(std::move(t));
@@ -50,15 +54,25 @@ ThreadPool::~ThreadPool() {
 
 int ThreadPool::addTask(taskFn fn) {
     std::cout << "Adding task to queue: " << taskCounter << std::endl;
-    {
-        std::unique_lock<std::mutex> queueLock(mQueueMutex);
-        mTasks.push(Task(fn, taskCounter++));
-        mCondVar.notify_one();
-    }
-    return taskCounter;
+    std::unique_lock<std::mutex> queueLock(mQueueMutex);
+    auto t = Task(fn, taskCounter++);
+    mTasks.push_back(t);
+    mCondVar.notify_one();
+    return t.getId();
 }
 
 bool ThreadPool::isEmpty() {
     return mTasks.empty();
 }
 
+DeleteResponse ThreadPool::deleteTask(int taskId) {
+    std::unique_lock<std::mutex> queueLock(mQueueMutex);
+    for (auto t = mTasks.begin(); t != mTasks.end();) {
+        if (t->getId() == taskId) {
+            mTasks.erase(t);
+            return DeleteResponse::DELETED;
+        }
+        ++t;
+    }
+    return DeleteResponse::NOT_FOUND;
+}

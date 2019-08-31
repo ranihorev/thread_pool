@@ -11,8 +11,8 @@
 
 #include <vector>
 #include <thread>
-#include <queue>
 #include <mutex>
+#include <deque>
 #include <condition_variable>
 
 using taskFn = std::function<void(int taskId)>;
@@ -22,12 +22,18 @@ class Task {
     int mId;
 public:
     Task(taskFn fn, int taskId);
+    Task();
     void execute();
     int getId();
 };
 
+enum class DeleteResponse {
+    DELETED,
+    NOT_FOUND
+};
+
 class ThreadPool {
-    std::queue<Task> mTasks;
+    std::deque<Task> mTasks;
     std::vector<std::thread> mThreads;
     const int mSize;
     int taskCounter = 0;
@@ -39,6 +45,7 @@ public:
     ~ThreadPool();
     int addTask(taskFn fn);
     bool isEmpty();
+    DeleteResponse deleteTask(int taskId);
 };
 
 #endif /* ThreadPool_h */
